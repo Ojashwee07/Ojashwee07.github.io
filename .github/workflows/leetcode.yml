@@ -1,0 +1,35 @@
+name: Update LeetCode stats
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch stats
+        run: |
+          curl -s https://leetcode.com/graphql \
+            -H "Content-Type: application/json" \
+            -H "Referer: https://leetcode.com" \
+            -H "User-Agent: Mozilla/5.0" \
+            --data '{"query":"query($u:String!){matchedUser(username:$u){profile{ranking} submitStatsGlobal{acSubmissionNum{difficulty count}}}}","variables":{"u":"ojashwee7"}}' > raw.json
+          python3 - <<'PY'
+          import json, datetime
+          d = json.load(open('raw.json'))['data']['matchedUser']
+          c = {x['difficulty']: x['count'] for x in d['submitStatsGlobal']['acSubmissionNum']}
+          out = {"easy": c['Easy'], "medium": c['Medium'], "hard": c['Hard'],
+                 "ranking": d['profile']['ranking'], "updated": datetime.date.today().isoformat()}
+          json.dump(out, open('stats.json', 'w'))
+          PY
+          rm raw.json
+      - name: Commit
+        run: |
+          git config user.name "stats-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add stats.json
+          git diff --staged --quiet || git commit -m "Update LeetCode stats"
+          git push
